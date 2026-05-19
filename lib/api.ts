@@ -1,6 +1,6 @@
 const API_BASE = '/api/reelshort';
 
-const REQUEST_TIMEOUT = 10000;
+const REQUEST_TIMEOUT = 35000; // 35 detik — lebih panjang dari upstream timeout (30s)
 const MAX_RETRIES = 2;
 const CACHE_TTL = 10 * 60 * 1000;
 
@@ -72,7 +72,6 @@ export interface Drama {
   chapters?: ChapterInfo[];
 }
 
-// Detail drama lengkap dari endpoint /drama/:book_id
 export interface DramaDetail {
   book_id: string;
   book_title: string;
@@ -123,14 +122,27 @@ async function apiFetch<T>(path: string, retries = MAX_RETRIES, bypassCache = fa
     clearTimeout(timeoutId);
 
     if (!res.ok) {
+      // Baca error message dari proxy jika ada
+      let errMsg = `API error: ${res.status}`;
+      try {
+        const errBody = await res.json();
+        if (errBody?.error) errMsg = errBody.error;
+      } catch { /* ignore */ }
+
       if (res.status >= 500 && retries > 0) {
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 1000));
         return apiFetch<T>(path, retries - 1, bypassCache);
       }
-      throw new Error(`API error: ${res.status}`);
+      throw new Error(errMsg);
     }
 
     const data = await res.json();
+
+    // Validasi: pastikan data bukan error object dari proxy
+    if (data && typeof data === 'object' && 'error' in data && Object.keys(data).length === 1) {
+      throw new Error(String(data.error));
+    }
+
     if (!bypassCache) setCache<T>(path, data);
     return data;
 
@@ -138,10 +150,10 @@ async function apiFetch<T>(path: string, retries = MAX_RETRIES, bypassCache = fa
     clearTimeout(timeoutId);
     if (error instanceof Error && error.name === 'AbortError') {
       if (retries > 0) {
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 1000));
         return apiFetch<T>(path, retries - 1, bypassCache);
       }
-      throw new Error('Request timeout');
+      throw new Error('Request timeout — API mungkin sedang cold start, coba refresh');
     }
     throw error;
   }
@@ -158,7 +170,6 @@ export async function searchDramas(keywords: string): Promise<SearchResult[]> {
   } catch { return []; }
 }
 
-/** Detail lengkap drama: sinopsis, kategori, daftar episode */
 export async function getDramaDetail(book_id: string, filtered_title: string): Promise<DramaDetail | null> {
   try {
     return await apiFetch<DramaDetail>(
@@ -171,7 +182,6 @@ export async function getDramaDetail(book_id: string, filtered_title: string): P
   }
 }
 
-/** Backward compat — episode list saja */
 export async function getEpisodeList(book_id: string, filtered_title: string): Promise<EpisodeItem[]> {
   try {
     const data = await apiFetch<{ episodes: EpisodeItem[] }>(
