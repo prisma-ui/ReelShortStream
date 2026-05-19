@@ -1,11 +1,12 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Search, Grid, Tag } from 'lucide-react';
+import { Home, Search, Grid, Tag, Film } from 'lucide-react';
 
 const TABS = [
   { href: '/', label: 'Beranda', icon: Home },
   { href: '/browse', label: 'Jelajahi', icon: Grid },
+  { href: '/genre', label: 'Genre', icon: Film },
   { href: '/tags', label: 'Tags', icon: Tag },
   { href: '/search', label: 'Cari', icon: Search },
 ];

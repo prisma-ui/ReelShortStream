@@ -327,13 +327,14 @@ export async function getTagsList(): Promise<TagsList> {
 }
 
 /**
- * Daftar drama berdasarkan tag slug.
+ * Daftar drama berdasarkan tag slug (dengan pagination).
  * - Kategori utama: 'movie-actors', 'movie-actresses', dst.
  * - Sub-tag aktor : 'movie-actors/cameron-saffle-movies-676d...'
  */
-export async function getDramasByTag(tag_slug: string): Promise<TagDramas | null> {
+export async function getDramasByTag(tag_slug: string, page = 1): Promise<TagDramas | null> {
   try {
-    return await apiFetch<TagDramas>(`/tags/${encodeURIComponent(tag_slug)}`);
+    const qs = page > 1 ? `?page=${page}` : '';
+    return await apiFetch<TagDramas>(`/tags/${encodeURIComponent(tag_slug)}${qs}`, MAX_RETRIES, page > 1);
   } catch (error) {
     console.error('Error getDramasByTag:', error);
     return null;
@@ -341,20 +342,70 @@ export async function getDramasByTag(tag_slug: string): Promise<TagDramas | null
 }
 
 /**
- * Daftar drama untuk sub-tag aktor/aktris tertentu.
+ * Daftar drama untuk sub-tag aktor/aktris tertentu (dengan pagination).
  * category_slug : 'movie-actors' | 'movie-actresses' | ...
  * actor_slug    : 'cameron-saffle-movies-676d21074582b53a14081698'
  */
 export async function getDramasByActorTag(
   category_slug: string,
-  actor_slug: string
+  actor_slug: string,
+  page = 1
 ): Promise<TagDramas | null> {
   try {
+    const qs = page > 1 ? `?page=${page}` : '';
     return await apiFetch<TagDramas>(
-      `/tags/${encodeURIComponent(category_slug)}/${encodeURIComponent(actor_slug)}`
+      `/tags/${encodeURIComponent(category_slug)}/${encodeURIComponent(actor_slug)}${qs}`,
+      MAX_RETRIES, page > 1
     );
   } catch (error) {
     console.error('Error getDramasByActorTag:', error);
+    return null;
+  }
+}
+
+// ── Types: Genre ──────────────────────────────────────────────────────────
+
+export interface GenreItem {
+  genre_id: string;
+  name: string;
+  slug: string;
+  book_count?: number;
+  pic?: string;
+}
+
+export interface GenreList {
+  genres: GenreItem[];
+  total: number;
+}
+
+export interface GenreDramas {
+  genre_id: string;
+  genre_name: string;
+  genre_slug: string;
+  dramas: SearchResult[];
+  total: number;
+  page?: number;
+  total_pages?: number;
+}
+
+// ── API calls: Genre ──────────────────────────────────────────────────────
+
+/** Ambil semua genre/kategori drama */
+export async function getGenres(): Promise<GenreList> {
+  try {
+    return await apiFetch<GenreList>('/genres');
+  } catch {
+    return { genres: [], total: 0 };
+  }
+}
+
+/** Ambil drama berdasarkan genre slug (dengan pagination) */
+export async function getDramasByGenre(genre_slug: string, page = 1): Promise<GenreDramas | null> {
+  try {
+    const qs = page > 1 ? `?page=${page}` : '';
+    return await apiFetch<GenreDramas>(`/genres/${encodeURIComponent(genre_slug)}${qs}`, MAX_RETRIES, page > 1);
+  } catch (error) {
+    console.error('Error getDramasByGenre:', error);
     return null;
   }
 }
