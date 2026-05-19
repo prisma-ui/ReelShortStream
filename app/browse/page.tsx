@@ -8,9 +8,9 @@ import { Grid } from 'lucide-react';
 type Shelf = 'newrelease' | 'recommend' | 'dramadub';
 
 const SHELF_LABELS: Record<Shelf, string> = {
-  newrelease: 'Rilis Baru 💥',
-  recommend: 'Direkomendasikan 🔍',
-  dramadub: 'Drama Dub 🎧',
+  newrelease: 'Rilis Baru',
+  recommend: 'Rekomendasi',
+  dramadub: 'Drama Dub',
 };
 
 function BrowseContent() {
@@ -19,13 +19,29 @@ function BrowseContent() {
   const [activeShelf, setActiveShelf] = useState<Shelf>(shelfParam);
   const [dramas, setDramas] = useState<Drama[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
+    setError(null);
+    
     const fetcher = activeShelf === 'dramadub' ? getDramaDub : activeShelf === 'recommend' ? getRecommended : getNewRelease;
+    
     fetcher()
-      .then(data => setDramas(data.books.map(bookToDrama)))
-      .catch(() => setDramas([]))
+      .then(data => {
+        if (data.books && data.books.length > 0) {
+          setDramas(data.books.map(bookToDrama));
+          setError(null);
+        } else {
+          setDramas([]);
+          setError('Tidak ada drama ditemukan di kategori ini');
+        }
+      })
+      .catch(err => {
+        console.error(`Error loading ${activeShelf}:`, err);
+        setDramas([]);
+        setError('Gagal memuat drama. Silakan coba lagi.');
+      })
       .finally(() => setLoading(false));
   }, [activeShelf]);
 
@@ -68,7 +84,7 @@ function BrowseContent() {
       {!loading && dramas.length === 0 && (
         <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
           <Grid size={40} style={{ marginBottom: '12px', opacity: 0.4 }} />
-          <p>Tidak ada drama ditemukan</p>
+          <p>{error || 'Tidak ada drama ditemukan'}</p>
         </div>
       )}
     </div>
