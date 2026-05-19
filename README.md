@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ReelShort Stream
 
-## Getting Started
+Website streaming drama pendek berbasis [ReelShort](https://reelshort.com), dibangun dengan Next.js 15 dan terhubung ke ReelShort API.
 
-First, run the development server:
+## Fitur
+
+- 🎬 Browse drama dari shelf: Rilis Baru, Direkomendasikan, Drama Dub
+- 🔍 Pencarian drama real-time
+- 📺 Player video per episode dengan navigasi episode berikutnya
+- 🔒 API URL tersembunyi — semua request lewat proxy internal Next.js
+- 📱 Tampilan mobile-first
+
+## Struktur Halaman
+
+| Route | Halaman |
+|---|---|
+| `/` | Beranda — hero carousel + section drama |
+| `/browse` | Jelajahi drama per kategori shelf |
+| `/search` | Pencarian drama |
+| `/drama/[bookId]` | Detail drama + daftar episode |
+| `/watch/[bookId]/[episodeNum]` | Player video episode |
+
+## Setup Lokal
 
 ```bash
+# Install dependencies
+npm install
+
+# Buat file .env.local
+cp .env.example .env.local
+
+# Jalankan dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Buka [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Keterangan |
+|---|---|
+| `REELSHORT_API_URL` | URL base API ReelShort (wajib di production) |
 
-## Learn More
+Nilai default jika tidak di-set: `https://reelshortapi.onrender.com`
 
-To learn more about Next.js, take a look at the following resources:
+## Deploy ke Vercel
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Push repo ke GitHub
+2. Import project di [vercel.com](https://vercel.com)
+3. Tambahkan environment variable di **Project Settings → Environment Variables**:
+   ```
+   REELSHORT_API_URL = https://reelshortapi.onrender.com
+   ```
+4. Klik **Deploy**
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Stack
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [Next.js 15](https://nextjs.org) — App Router
+- [TypeScript](https://typescriptlang.org)
+- [Lucide React](https://lucide.dev) — Icons
+- [ReelShort API](https://google.com) — Data source
