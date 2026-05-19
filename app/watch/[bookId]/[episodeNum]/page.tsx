@@ -55,6 +55,7 @@ function VideoSlot({
   onMuteToggle: () => void;
   isClean: boolean;
   onCleanToggle: () => void;
+  onVideoEnded: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -211,7 +212,7 @@ function VideoSlot({
           playsInline
           muted={isMuted}
           onTimeUpdate={handleTimeUpdate}
-          onEnded={() => setIsPlaying(false)}
+          onEnded={() => { setIsPlaying(false); onVideoEnded(); }}
           onPlay={() => setIsPlaying(true)}
           onPause={() => setIsPlaying(false)}
           style={{
@@ -706,35 +707,6 @@ function WatchContent() {
           transition: 'opacity 0.3s ease',
         }}
       >
-
-      {/* ── Restore button (hanya tampil saat clean mode aktif) ── */}
-      <button
-        onClick={() => setIsClean(false)}
-        style={{
-          position: 'fixed',
-          bottom: 24,
-          left: '50%',
-          transform: `translateX(-50%) translateY(${isClean ? '0' : '80px'})`,
-          zIndex: 200,
-          background: 'rgba(0,0,0,0.55)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255,255,255,0.2)',
-          borderRadius: 24,
-          padding: '8px 20px',
-          color: '#fff',
-          fontSize: '0.8rem',
-          fontWeight: 600,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 7,
-          cursor: 'pointer',
-          opacity: isClean ? 1 : 0,
-          pointerEvents: isClean ? 'auto' : 'none',
-          transition: 'opacity 0.3s ease, transform 0.3s ease',
-        }}
-      >
-        <Eye size={15} /> Tampilkan kontrol
-      </button>
         <button
           onClick={() => navigateSlot(-1)}
           disabled={activeIndex === 0}
@@ -776,6 +748,35 @@ function WatchContent() {
         </button>
       </div>
 
+      {/* ── Restore button — di luar nav div agar pointerEvents tidak terblokir ── */}
+      <button
+        onClick={() => setIsClean(false)}
+        style={{
+          position: 'fixed',
+          bottom: 24,
+          left: '50%',
+          transform: `translateX(-50%) translateY(${isClean ? '0' : '80px'})`,
+          zIndex: 200,
+          background: 'rgba(0,0,0,0.55)',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255,255,255,0.2)',
+          borderRadius: 24,
+          padding: '8px 20px',
+          color: '#fff',
+          fontSize: '0.8rem',
+          fontWeight: 600,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 7,
+          cursor: 'pointer',
+          opacity: isClean ? 1 : 0,
+          pointerEvents: isClean ? 'auto' : 'none',
+          transition: 'opacity 0.3s ease, transform 0.3s ease',
+        }}
+      >
+        <Eye size={15} /> Tampilkan kontrol
+      </button>
+
       {/* ── Scroll container ── */}
       <div
         ref={scrollContainerRef}
@@ -804,6 +805,7 @@ function WatchContent() {
             onMuteToggle={() => setIsMuted((m) => !m)}
             isClean={isClean}
             onCleanToggle={() => setIsClean((c) => !c)}
+            onVideoEnded={() => { if (idx === activeIndex) setTimeout(() => navigateSlot(1), 800); }}
           />
         ))}
       </div>
