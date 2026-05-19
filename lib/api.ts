@@ -245,3 +245,97 @@ export function getCoverImage(item: Drama | EpisodeDetail | SearchResult): strin
   if ('book_pic' in item) return item.book_pic || '/placeholder.jpg';
   return '/placeholder.jpg';
 }
+
+// ── Types: Tags ───────────────────────────────────────────────────────────
+
+export interface Tag {
+  slug: string;
+  name: string;
+  drama_count: number;
+}
+
+export interface TagsList {
+  tags: Tag[];
+  total: number;
+}
+
+export interface EpisodeTags {
+  book_id: string;
+  episode: number;
+  categories: string[];
+  tags: string[];
+  all_tags: string[];
+}
+
+export interface TagDramas {
+  tag_slug: string;
+  tag_name: string;
+  dramas: SearchResult[];
+  total: number;
+}
+
+// ── API calls: Tags ───────────────────────────────────────────────────────
+
+/** Ambil kategori/tags dari halaman episode */
+export async function getEpisodeTags(
+  book_id: string,
+  episode_num: number,
+  filtered_title: string,
+  chapter_id: string
+): Promise<EpisodeTags | null> {
+  try {
+    return await apiFetch<EpisodeTags>(
+      `/episode-tags/${book_id}/${episode_num}?filtered_title=${encodeURIComponent(filtered_title)}&chapter_id=${encodeURIComponent(chapter_id)}`,
+      MAX_RETRIES, true
+    );
+  } catch (error) {
+    console.error('Error getEpisodeTags:', error);
+    return null;
+  }
+}
+
+/** List semua tag/kategori yang tersedia */
+export async function getTagsList(): Promise<TagsList> {
+  try {
+    return await apiFetch<TagsList>('/tags');
+  } catch {
+    return { tags: [], total: 0 };
+  }
+}
+
+/** Daftar drama berdasarkan tag slug, misal: 'movie-actors' */
+export async function getDramasByTag(tag_slug: string): Promise<TagDramas | null> {
+  try {
+    return await apiFetch<TagDramas>(`/tags/${encodeURIComponent(tag_slug)}`);
+  } catch (error) {
+    console.error('Error getDramasByTag:', error);
+    return null;
+  }
+}
+
+// ── Types: Tag Categories ─────────────────────────────────────────────────
+
+export interface TagCategory {
+  category_slug: string;
+  category_name: string;
+  sub_tags: Tag[];
+  total: number;
+}
+
+/** 4 kategori utama tags ReelShort */
+export const TAG_CATEGORIES = [
+  { slug: 'movie-actors',     label: 'Movie Actors',     emoji: '🎭' },
+  { slug: 'movie-actresses',  label: 'Movie Actresses',  emoji: '👸' },
+  { slug: 'movie-identities', label: 'Movie Identities', emoji: '🎬' },
+  { slug: 'story-beats',      label: 'Story Beats',      emoji: '📖' },
+] as const;
+
+/** Ambil sub-tags dari salah satu 4 kategori utama */
+export async function getSubTagsByCategory(category_slug: string): Promise<TagCategory | null> {
+  try {
+    return await apiFetch<TagCategory>(`/tags/category/${encodeURIComponent(category_slug)}`);
+  } catch (error) {
+    console.error('Error getSubTagsByCategory:', error);
+    return null;
+  }
+}
