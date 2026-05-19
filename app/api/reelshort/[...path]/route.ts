@@ -1,29 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Backend API URL - ambil dari env atau default
 const BACKEND_API = process.env.NEXT_PUBLIC_BACKEND_API || 
   'https://your-api.onrender.com/api/v1/reelshort';
 
 /**
- * Proxy handler untuk semua request ke ReelShort API backend
- * Handles: /api/reelshort/*
- * 
- * Fitur:
- * - Caching dengan max-age 300 detik (5 menit)
- * - Error handling yang proper
- * - Request logging
- * - CORS-safe (Next.js handle di edge)
+ * ✅ FIXED untuk Next.js 16+ 
+ * params sekarang Promise<params> bukan direct params
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { path: string[] } }
+  { params }: { params: Promise<{ path: string[] }> }
 ) {
   try {
-    // 1. Reconstruct full path dari dynamic route parameters
-    const pathSegments = params.path;
-    const pathname = '/' + pathSegments.join('/');
+    // ✅ CHANGED: Await params karena sekarang Promise
+    const { path: pathSegments } = await params;
     
-    // 2. Copy semua query parameters
+    const pathname = '/' + pathSegments.join('/');
     const searchParams = request.nextUrl.searchParams;
     const queryString = searchParams.toString();
     const fullUrl = `${BACKEND_API}${pathname}${
@@ -32,7 +24,6 @@ export async function GET(
 
     console.log(`[API Proxy] GET ${fullUrl}`);
 
-    // 3. Forward request ke backend dengan timeout
     const backendResponse = await Promise.race([
       fetch(fullUrl, {
         method: 'GET',
@@ -40,12 +31,10 @@ export async function GET(
           'Content-Type': 'application/json',
           'User-Agent': 
             request.headers.get('user-agent') || 'ReelShortStream/1.0',
-          // Forward original headers jika perlu
           'Accept': request.headers.get('accept') || 'application/json',
         },
       }),
-      // Timeout 15 detik
-      new Promise((_, reject) =>
+      new Promise<never>((_, reject) =>
         setTimeout(
           () => reject(new Error('Backend request timeout (15s)')),
           15000
@@ -58,7 +47,6 @@ export async function GET(
         `[API Proxy] Backend error: ${backendResponse.status} ${backendResponse.statusText}`
       );
 
-      // Jika backend down, return error yang meaningful
       return NextResponse.json(
         {
           error: 'Backend service unavailable',
@@ -69,19 +57,11 @@ export async function GET(
       );
     }
 
-    // 4. Parse response dari backend
     const data = await backendResponse.json();
 
-    // 5. Set cache headers untuk browser + CDN
     const headers = new Headers();
     headers.set('Content-Type', 'application/json; charset=utf-8');
-    
-    // ⭐ PENTING: Cache di browser selama 5 menit
-    // public = bisa di-cache CDN + browser
-    // max-age=300 = cache duration dalam detik
     headers.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
-    
-    // Tambahan headers untuk Vercel/Edge caching
     headers.set('CDN-Cache-Control', 'max-age=300');
 
     console.log(`[API Proxy] Success: ${pathname}`);
@@ -107,16 +87,16 @@ export async function GET(
 }
 
 /**
- * Optional: Handle HEAD requests untuk cache validation
+ * Optional: Handle HEAD requests
  */
 export async function HEAD(
   request: NextRequest,
-  { params }: { params: { path: string[] } }
+  { params }: { params: Promise<{ path: string[] }> }
 ) {
   try {
-    const pathSegments = params.path;
-    const pathname = '/' + pathSegments.join('/');
+    const { path: pathSegments } = await params;
     
+    const pathname = '/' + pathSegments.join('/');
     const searchParams = request.nextUrl.searchParams;
     const queryString = searchParams.toString();
     const fullUrl = `${BACKEND_API}${pathname}${
