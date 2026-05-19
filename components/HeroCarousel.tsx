@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Play, Share2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Play, Share2 } from 'lucide-react';
 import { Drama, getCoverImage } from '@/lib/api';
 
 interface Props {

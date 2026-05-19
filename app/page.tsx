@@ -1,4 +1,5 @@
-'use client'
+'use client';
+import { useState, useEffect } from 'react';
 import HeroCarousel from '@/components/HeroCarousel';
 import DramaSection from '@/components/DramaSection';
 import {
@@ -9,31 +10,33 @@ import {
   Drama,
 } from '@/lib/api';
 
-export const revalidate = 60;
+export default function HomePage() {
+  const [dubDramas, setDubDramas] = useState<Drama[]>([]);
+  const [newReleases, setNewReleases] = useState<Drama[]>([]);
+  const [recommended, setRecommended] = useState<Drama[]>([]);
+  const [loading, setLoading] = useState(true);
 
-export default async function HomePage() {
-  let dubDramas: Drama[] = [];
-  let newReleases: Drama[] = [];
-  let recommended: Drama[] = [];
+  useEffect(() => {
+    Promise.allSettled([getDramaDub(), getNewRelease(), getRecommended()])
+      .then(([dubRes, newRes, recRes]) => {
+        if (dubRes.status === 'fulfilled') setDubDramas(dubRes.value.books.map(bookToDrama));
+        if (newRes.status === 'fulfilled') setNewReleases(newRes.value.books.map(bookToDrama));
+        if (recRes.status === 'fulfilled') setRecommended(recRes.value.books.map(bookToDrama));
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
-  try {
-    const [dubRes, newRes, recRes] = await Promise.allSettled([
-      getDramaDub(),
-      getNewRelease(),
-      getRecommended(),
-    ]);
+  const heroItems = [...newReleases.slice(0, 3), ...recommended.slice(0, 3)].slice(0, 6);
 
-    if (dubRes.status === 'fulfilled') dubDramas = dubRes.value.books.map(bookToDrama);
-    if (newRes.status === 'fulfilled') newReleases = newRes.value.books.map(bookToDrama);
-    if (recRes.status === 'fulfilled') recommended = recRes.value.books.map(bookToDrama);
-  } catch (e) {
-    console.error('Failed to fetch home data', e);
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '120px 20px' }}>
+        <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🎬</div>
+        <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '8px' }}>Memuat Konten...</h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Menghubungkan ke ReelShort API</p>
+      </div>
+    );
   }
-
-  const heroItems = [
-    ...newReleases.slice(0, 3),
-    ...recommended.slice(0, 3),
-  ].slice(0, 6);
 
   return (
     <div>
@@ -42,24 +45,24 @@ export default async function HomePage() {
       ) : (
         <div style={{ textAlign: 'center', padding: '80px 20px 20px' }}>
           <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🎬</div>
-          <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '8px' }}>Memuat Konten...</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Menghubungkan ke ReelShort API</p>
+          <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '8px' }}>Tidak ada konten</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Gagal memuat data dari API</p>
         </div>
       )}
 
       {newReleases.length > 0 && (
-        <DramaSection title="Rilis Baru" items={newReleases.slice(0, 12)} seeAllHref="/browse?shelf=newrelease" />
+        <DramaSection title="Rilis Baru 💥" items={newReleases.slice(0, 12)} seeAllHref="/browse?shelf=newrelease" />
       )}
       {recommended.length > 0 && (
-        <DramaSection title="Direkomendasikan" items={recommended.slice(0, 12)} seeAllHref="/browse?shelf=recommend" />
+        <DramaSection title="Lebih Direkomendasikan 🔍" items={recommended.slice(0, 12)} seeAllHref="/browse?shelf=recommend" />
       )}
       {dubDramas.length > 0 && (
-        <DramaSection title="Drama Dub" items={dubDramas.slice(0, 12)} seeAllHref="/browse?shelf=dramadub" />
+        <DramaSection title="Drama dengan Dub 🎧" items={dubDramas.slice(0, 12)} seeAllHref="/browse?shelf=dramadub" />
       )}
 
       <footer style={{ padding: '32px 20px 8px', borderTop: '1px solid var(--border)', marginTop: '24px' }}>
         <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.72rem' }}>
-          ReelShort © 2026 · Powered by ReelShort
+          ReelShort © 2024 · Powered by ReelShort API
         </p>
       </footer>
     </div>

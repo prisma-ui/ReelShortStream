@@ -8,9 +8,9 @@ import { Grid } from 'lucide-react';
 type Shelf = 'newrelease' | 'recommend' | 'dramadub';
 
 const SHELF_LABELS: Record<Shelf, string> = {
-  newrelease: 'Rilis Baru',
-  recommend: 'Direkomendasikan',
-  dramadub: 'Drama Dub',
+  newrelease: 'Rilis Baru 💥',
+  recommend: 'Direkomendasikan 🔍',
+  dramadub: 'Drama Dub 🎧',
 };
 
 function BrowseContent() {

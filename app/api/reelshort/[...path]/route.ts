@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE = process.env.REELSHORT_API_URL!;
+const API_BASE = process.env.REELSHORT_API_URL ?? 'https://reelshortapi.onrender.com';
 
 export async function GET(
   req: NextRequest,
@@ -14,7 +14,7 @@ export async function GET(
   try {
     const res = await fetch(url, {
       headers: { 'Content-Type': 'application/json' },
-      next: { revalidate: 60 },
+      cache: 'no-store',
     });
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
