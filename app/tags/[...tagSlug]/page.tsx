@@ -7,10 +7,10 @@ import { getDramasByTag, getDramasByActorTag, searchResultToDrama, TAG_CATEGORIE
 import { Tag as TagIcon, ArrowLeft, Loader2 } from 'lucide-react';
 
 interface PageProps {
-  params: Promise<{ tagSlug: string }>;
+  params: Promise<{ tagSlug: string[] }>;
 }
 
-// Tentukan warna berdasarkan parent category (best-effort dari slug prefix)
+// Tentukan warna berdasarkan parent category
 function getCategoryColor(slug: string): string {
   const colors: Record<string, string> = {
     'movie-actors':     '#e85d04',
@@ -18,7 +18,6 @@ function getCategoryColor(slug: string): string {
     'movie-identities': '#0077b6',
     'story-beats':      '#1a7a4a',
   };
-  // Cek apakah slug cocok dengan salah satu kategori utama atau prefixnya
   for (const [cat, color] of Object.entries(colors)) {
     if (slug === cat || slug.startsWith(cat + '/')) return color;
   }
@@ -26,24 +25,25 @@ function getCategoryColor(slug: string): string {
 }
 
 export default function TagDramasPage({ params }: PageProps) {
-  const { tagSlug } = use(params);
+  // tagSlug adalah array: ['movie-actors'] atau ['movie-actors', 'cameron-saffle-movies-676d...']
+  const { tagSlug: tagSlugParts } = use(params);
   const router = useRouter();
 
+  const categorySlug = tagSlugParts[0] ?? '';
+  const actorSlug    = tagSlugParts[1] ?? '';
+  const isSubTag     = tagSlugParts.length > 1;
+  const fullSlug     = tagSlugParts.join('/');
+
   const [tagName, setTagName] = useState<string>(
-    tagSlug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    (actorSlug || categorySlug).replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
   );
   const [dramas, setDramas] = useState<ReturnType<typeof searchResultToDrama>[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const accentColor = getCategoryColor(tagSlug);
+  const accentColor = getCategoryColor(fullSlug);
 
-  // Cek apakah tagSlug ini adalah salah satu dari 4 kategori utama
-  const isMainCategory = TAG_CATEGORIES.some(c => c.slug === tagSlug);
-  const categoryMeta = TAG_CATEGORIES.find(c => c.slug === tagSlug);
-
-  // Cek apakah ini sub-tag aktor (format: movie-actors/cameron-saffle-movies-676d...)
-  const isSubTag = tagSlug.includes('/');
-  const [parentCategory, actorSlug] = isSubTag ? tagSlug.split('/') : [tagSlug, ''];
+  const isMainCategory = TAG_CATEGORIES.some(c => c.slug === categorySlug) && !isSubTag;
+  const categoryMeta = TAG_CATEGORIES.find(c => c.slug === categorySlug);
 
   const loadDramas = async () => {
     setLoading(true);
@@ -51,10 +51,11 @@ export default function TagDramasPage({ params }: PageProps) {
 
     let data;
     if (isSubTag) {
-      // Sub-tag aktor: panggil dengan category + actor slug terpisah
-      data = await getDramasByActorTag(parentCategory, actorSlug);
+      // Sub-tag aktor: /tags/movie-actors/cameron-saffle-movies-676d...
+      data = await getDramasByActorTag(categorySlug, actorSlug);
     } else {
-      data = await getDramasByTag(tagSlug);
+      // Kategori utama: /tags/movie-actors
+      data = await getDramasByTag(categorySlug);
     }
 
     setLoading(false);
@@ -70,7 +71,7 @@ export default function TagDramasPage({ params }: PageProps) {
   useEffect(() => {
     loadDramas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tagSlug]);
+  }, [fullSlug]);
 
   return (
     <div style={{ paddingBottom: '80px' }}>
@@ -118,7 +119,7 @@ export default function TagDramasPage({ params }: PageProps) {
           <h1 style={{ fontSize: '1.1rem', fontWeight: 800, lineHeight: 1.2 }}>
             {loading ? (
               <span style={{ color: 'var(--text-muted)' }}>
-                {tagSlug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                {(actorSlug || categorySlug).replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
               </span>
             ) : tagName}
           </h1>

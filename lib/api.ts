@@ -72,6 +72,22 @@ export interface Drama {
   chapters?: ChapterInfo[];
 }
 
+export interface TagItem {
+  id: string;
+  text: string;
+  category_id: string;
+  category_slug: string;
+  href: string;
+}
+
+export interface YouMightLike {
+  book_id: string;
+  book_title: string;
+  filtered_title: string;
+  book_pic: string;
+  chapter_count: number;
+}
+
 export interface DramaDetail {
   book_id: string;
   book_title: string;
@@ -83,12 +99,16 @@ export interface DramaDetail {
   chapter_count: number;
   categories?: string[];
   tags?: string[];
+  tag_list?: TagItem[];
   language?: string;
   score?: number;
   total_likes?: number;
+  read_count?: number;
+  collect_count?: number;
   author?: string;
   release_year?: string;
   episodes: EpisodeItem[];
+  you_might_like?: YouMightLike[];
 }
 
 export interface EpisodeDetail {
@@ -249,9 +269,10 @@ export function getCoverImage(item: Drama | EpisodeDetail | SearchResult): strin
 // ── Types: Tags ───────────────────────────────────────────────────────────
 
 export interface Tag {
-  slug: string;
+  slug: string;   // untuk sub-tag aktor: 'cameron-saffle-movies-676d...' (relative ke category)
   name: string;
   drama_count: number;
+  id?: string;    // numeric-style ID dari ReelShort, misal '676d21074582b53a14081698'
 }
 
 export interface TagsList {
@@ -272,6 +293,15 @@ export interface TagDramas {
   tag_name: string;
   dramas: SearchResult[];
   total: number;
+}
+
+export interface TagDramas {
+  tag_slug: string;
+  tag_name: string;
+  dramas: SearchResult[];
+  total: number;
+  page?: number;
+  total_pages?: number;
 }
 
 // ── API calls: Tags ───────────────────────────────────────────────────────
@@ -303,12 +333,34 @@ export async function getTagsList(): Promise<TagsList> {
   }
 }
 
-/** Daftar drama berdasarkan tag slug, misal: 'movie-actors' */
+/**
+ * Daftar drama berdasarkan tag slug.
+ * - Kategori utama: 'movie-actors', 'movie-actresses', dst.
+ * - Sub-tag aktor : 'movie-actors/cameron-saffle-movies-676d...'
+ */
 export async function getDramasByTag(tag_slug: string): Promise<TagDramas | null> {
   try {
     return await apiFetch<TagDramas>(`/tags/${encodeURIComponent(tag_slug)}`);
   } catch (error) {
     console.error('Error getDramasByTag:', error);
+    return null;
+  }
+}
+
+/**
+ * Daftar drama untuk sub-tag aktor/aktris tertentu.
+ * category_slug : 'movie-actors' | 'movie-actresses' | ...
+ * actor_slug    : 'cameron-saffle-movies-676d21074582b53a14081698'
+ */
+export async function getDramasByActorTag(
+  category_slug: string,
+  actor_slug: string
+): Promise<TagDramas | null> {
+  const path = `${category_slug}/${actor_slug}`;
+  try {
+    return await apiFetch<TagDramas>(`/tags/${encodeURIComponent(path)}`);
+  } catch (error) {
+    console.error('Error getDramasByActorTag:', error);
     return null;
   }
 }

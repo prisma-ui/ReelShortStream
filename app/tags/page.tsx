@@ -171,7 +171,7 @@ export default function TagsPage() {
                 {currentData.sub_tags.map(tag => (
                   <button
                     key={tag.slug}
-                    onClick={() => router.push(`/tags/${tag.slug}`)}
+                    onClick={() => router.push(`/tags/${activeCategory}/${tag.slug}`)}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
