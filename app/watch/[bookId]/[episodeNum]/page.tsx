@@ -555,21 +555,6 @@ function WatchContent() {
     [loadEpisodeIntoSlot]
   );
 
-  // ── Keyboard navigation (desktop) ──
-  const navigateSlotRef = useRef<(dir: 1 | -1) => void>(() => {});
-  useEffect(() => { navigateSlotRef.current = navigateSlot; }, [navigateSlot]);
-
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        navigateSlotRef.current(e.key === 'ArrowDown' ? 1 : -1);
-      }
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, []); // ← [] penting: register sekali saja
-
   // ── Scroll detection: update activeIndex ──
   const activeIndexRef = useRef(0);
   useEffect(() => { activeIndexRef.current = activeIndex; }, [activeIndex]);
@@ -615,6 +600,18 @@ function WatchContent() {
     },
     []
   );
+
+  // ── Keyboard navigation (desktop) ──
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        navigateSlot(e.key === 'ArrowDown' ? 1 : -1);
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [navigateSlot]);
 
   // ── Touch swipe (mobile fallback) ──
   const touchStartY = useRef(0);
