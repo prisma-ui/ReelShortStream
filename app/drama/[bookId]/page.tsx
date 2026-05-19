@@ -1,10 +1,13 @@
 'use client';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Play, ChevronLeft, Film } from 'lucide-react';
 import { getEpisodeList, EpisodeItem } from '@/lib/api';
+
+// Module-level cache per bookId
+const episodeCache = new Map<string, EpisodeItem[]>();
 
 function DramaDetailContent() {
   const { bookId } = useParams() as { bookId: string };
@@ -13,16 +16,29 @@ function DramaDetailContent() {
   const dramaTitle = decodeURIComponent(searchParams.get('title') ?? 'Drama');
   const coverImage = decodeURIComponent(searchParams.get('cover') ?? '');
 
-  const [episodes, setEpisodes] = useState<EpisodeItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cacheKey = `${bookId}:${filteredTitle}`;
+  const [episodes, setEpisodes] = useState<EpisodeItem[]>(episodeCache.get(cacheKey) ?? []);
+  const [loading, setLoading] = useState(!episodeCache.has(cacheKey));
+  const fetchedRef = useRef(false);
 
   useEffect(() => {
-    if (!filteredTitle) { setLoading(false); return; }
+    if (!filteredTitle || episodeCache.has(cacheKey) || fetchedRef.current) {
+      setLoading(false);
+      return;
+    }
+    fetchedRef.current = true;
+
     getEpisodeList(bookId, filteredTitle)
-      .then(setEpisodes)
-      .catch(() => setEpisodes([]))
+      .then(data => {
+        episodeCache.set(cacheKey, data);
+        setEpisodes(data);
+      })
+      .catch(() => {
+        episodeCache.set(cacheKey, []);
+        setEpisodes([]);
+      })
       .finally(() => setLoading(false));
-  }, [bookId, filteredTitle]);
+  }, [bookId, filteredTitle, cacheKey]);
 
   return (
     <div>
