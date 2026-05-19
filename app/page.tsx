@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import HeroCarousel from '@/components/HeroCarousel';
 import DramaSection from '@/components/DramaSection';
 import {
@@ -10,52 +10,63 @@ import {
   Drama,
 } from '@/lib/api';
 
+// Module-level cache agar data tetap ada saat navigasi kembali ke homepage
+let pageCache: {
+  dubDramas: Drama[];
+  newReleases: Drama[];
+  recommended: Drama[];
+} | null = null;
+
 export default function HomePage() {
-  const [dubDramas, setDubDramas] = useState<Drama[]>([]);
-  const [newReleases, setNewReleases] = useState<Drama[]>([]);
-  const [recommended, setRecommended] = useState<Drama[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dubDramas, setDubDramas] = useState<Drama[]>(pageCache?.dubDramas ?? []);
+  const [newReleases, setNewReleases] = useState<Drama[]>(pageCache?.newReleases ?? []);
+  const [recommended, setRecommended] = useState<Drama[]>(pageCache?.recommended ?? []);
+  const [loading, setLoading] = useState(pageCache === null);
   const [error, setError] = useState<string | null>(null);
+  const fetchedRef = useRef(false);
 
   useEffect(() => {
+    // Jika data sudah ada di cache, skip fetch
+    if (pageCache !== null || fetchedRef.current) return;
+    fetchedRef.current = true;
+
     const loadData = async () => {
       try {
         setError(null);
-        
-        // Fetch data dengan Promise.allSettled untuk handle partial failures
+
         const [dubRes, newRes, recRes] = await Promise.allSettled([
           getDramaDub(),
           getNewRelease(),
           getRecommended(),
         ]);
 
-        // Process results dengan explicit error handling
-        if (dubRes.status === 'fulfilled' && dubRes.value.books?.length > 0) {
-          setDubDramas(dubRes.value.books.map(bookToDrama));
-        } else if (dubRes.status === 'rejected') {
-          console.error('Failed to fetch drama dub:', dubRes.reason);
-        }
+        const dub = dubRes.status === 'fulfilled' && dubRes.value.books?.length > 0
+          ? dubRes.value.books.map(bookToDrama)
+          : [];
+        const newR = newRes.status === 'fulfilled' && newRes.value.books?.length > 0
+          ? newRes.value.books.map(bookToDrama)
+          : [];
+        const rec = recRes.status === 'fulfilled' && recRes.value.books?.length > 0
+          ? recRes.value.books.map(bookToDrama)
+          : [];
 
-        if (newRes.status === 'fulfilled' && newRes.value.books?.length > 0) {
-          setNewReleases(newRes.value.books.map(bookToDrama));
-        } else if (newRes.status === 'rejected') {
-          console.error('Failed to fetch new releases:', newRes.reason);
-        }
+        if (dubRes.status === 'rejected') console.error('Failed to fetch drama dub:', dubRes.reason);
+        if (newRes.status === 'rejected') console.error('Failed to fetch new releases:', newRes.reason);
+        if (recRes.status === 'rejected') console.error('Failed to fetch recommended:', recRes.reason);
 
-        if (recRes.status === 'fulfilled' && recRes.value.books?.length > 0) {
-          setRecommended(recRes.value.books.map(bookToDrama));
-        } else if (recRes.status === 'rejected') {
-          console.error('Failed to fetch recommended:', recRes.reason);
-        }
-
-        // Set error message jika semua request gagal
-        const allFailed = 
-          dubRes.status === 'rejected' && 
-          newRes.status === 'rejected' && 
+        const allFailed =
+          dubRes.status === 'rejected' &&
+          newRes.status === 'rejected' &&
           recRes.status === 'rejected';
-        
+
         if (allFailed) {
           setError('Tidak dapat memuat konten. Silakan coba lagi.');
+        } else {
+          // Simpan ke module-level cache
+          pageCache = { dubDramas: dub, newReleases: newR, recommended: rec };
+          setDubDramas(dub);
+          setNewReleases(newR);
+          setRecommended(rec);
         }
       } catch (err) {
         console.error('Error loading homepage data:', err);
@@ -67,8 +78,6 @@ export default function HomePage() {
 
     loadData();
   }, []);
-
-
 
   const heroItems = [...newReleases.slice(0, 3), ...recommended.slice(0, 3)].slice(0, 6);
   const hasAnyData = newReleases.length > 0 || recommended.length > 0 || dubDramas.length > 0;
@@ -91,8 +100,8 @@ export default function HomePage() {
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '16px' }}>
           {error}
         </p>
-        <button 
-          onClick={() => window.location.reload()}
+        <button
+          onClick={() => { pageCache = null; window.location.reload(); }}
           style={{
             padding: '8px 16px',
             background: 'var(--accent)',
