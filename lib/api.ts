@@ -1,6 +1,10 @@
 // Semua request lewat proxy Next.js — URL asli API tidak terekspose ke browser
 const API_BASE = '/api/reelshort';
 
+// Timeout dalam milliseconds untuk setiap request
+const REQUEST_TIMEOUT = 8000; // 8 detik
+const MAX_RETRIES = 2; // Maksimal retry jika timeout
+
 export interface SearchResult {
   book_id: string;
   book_title: string;
@@ -67,27 +71,76 @@ export interface EpisodeDetail {
   next_episode?: EpisodeItem | null;
 }
 
-async function apiFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    cache: 'no-store',
-  });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
+/**
+ * Fetch dengan timeout dan retry logic
+ * @param path - API path
+ * @param retries - Jumlah retry yang tersisa
+ * @returns Response dari API
+ */
+async function apiFetch<T>(path: string, retries = MAX_RETRIES): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      // Jika 5xx error dan masih ada retry, coba lagi
+      if (res.status >= 500 && retries > 0) {
+        console.warn(`API error ${res.status}, retrying... (${retries} attempts left)`);
+        // Tunggu sebentar sebelum retry (exponential backoff)
+        await new Promise(r => setTimeout(r, 500));
+        return apiFetch<T>(path, retries - 1);
+      }
+      throw new Error(`API error: ${res.status}`);
+    }
+
+    return res.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+
+    // Handle AbortError (timeout)
+    if (error instanceof Error && error.name === 'AbortError') {
+      if (retries > 0) {
+        console.warn(`Request timeout, retrying... (${retries} attempts left)`);
+        await new Promise(r => setTimeout(r, 500));
+        return apiFetch<T>(path, retries - 1);
+      }
+      throw new Error('Request timeout after maximum retries');
+    }
+
+    throw error;
+  }
 }
 
 export async function searchDramas(keywords: string): Promise<SearchResult[]> {
-  const data = await apiFetch<{ results: SearchResult[] }>(
-    `/search?keywords=${encodeURIComponent(keywords)}`
-  );
-  return data.results ?? [];
+  try {
+    const data = await apiFetch<{ results: SearchResult[] }>(
+      `/search?keywords=${encodeURIComponent(keywords)}`
+    );
+    return data.results ?? [];
+  } catch (error) {
+    console.error('Error searching dramas:', error);
+    return [];
+  }
 }
 
 export async function getEpisodeList(book_id: string, filtered_title: string): Promise<EpisodeItem[]> {
-  const data = await apiFetch<{ episodes: EpisodeItem[] }>(
-    `/episodes/${book_id}?filtered_title=${encodeURIComponent(filtered_title)}`
-  );
-  return data.episodes ?? [];
+  try {
+    const data = await apiFetch<{ episodes: EpisodeItem[] }>(
+      `/episodes/${book_id}?filtered_title=${encodeURIComponent(filtered_title)}`
+    );
+    return data.episodes ?? [];
+  } catch (error) {
+    console.error('Error getting episode list:', error);
+    return [];
+  }
 }
 
 export async function getVideoData(
@@ -102,15 +155,30 @@ export async function getVideoData(
 }
 
 export async function getDramaDub(): Promise<BookshelfData> {
-  return apiFetch<BookshelfData>('/dramadub');
+  try {
+    return await apiFetch<BookshelfData>('/dramadub');
+  } catch (error) {
+    console.error('Error getting drama dub:', error);
+    return { bookshelf_name: 'Drama Dub', books: [] };
+  }
 }
 
 export async function getNewRelease(): Promise<BookshelfData> {
-  return apiFetch<BookshelfData>('/newrelease');
+  try {
+    return await apiFetch<BookshelfData>('/newrelease');
+  } catch (error) {
+    console.error('Error getting new release:', error);
+    return { bookshelf_name: 'New Release', books: [] };
+  }
 }
 
 export async function getRecommended(): Promise<BookshelfData> {
-  return apiFetch<BookshelfData>('/recommend');
+  try {
+    return await apiFetch<BookshelfData>('/recommend');
+  } catch (error) {
+    console.error('Error getting recommended:', error);
+    return { bookshelf_name: 'Recommended', books: [] };
+  }
 }
 
 export function bookToDrama(book: BookInfo): Drama {
