@@ -13,6 +13,8 @@ import {
   Minimize,
   ChevronUp,
   ChevronDown,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { getVideoData, getEpisodeList, VideoData, EpisodeItem } from '@/lib/api';
 
@@ -39,6 +41,8 @@ function VideoSlot({
   totalEpisodes,
   isMuted,
   onMuteToggle,
+  isClean,
+  onCleanToggle,
 }: {
   slot: SlotData;
   isActive: boolean;
@@ -49,6 +53,8 @@ function VideoSlot({
   totalEpisodes: number;
   isMuted: boolean;
   onMuteToggle: () => void;
+  isClean: boolean;
+  onCleanToggle: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -271,6 +277,9 @@ function VideoSlot({
           alignItems: 'center',
           justifyContent: 'space-between',
           background: 'linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%)',
+          opacity: isClean ? 0 : 1,
+          pointerEvents: isClean ? 'none' : 'auto',
+          transition: 'opacity 0.3s ease',
         }}
       >
         <Link
@@ -327,7 +336,7 @@ function VideoSlot({
         </button>
       </div>
 
-      {/* ── Right action bar: Fullscreen ── */}
+      {/* ── Right action bar: Fullscreen + Clean View ── */}
       <div
         style={{
           position: 'absolute',
@@ -338,6 +347,8 @@ function VideoSlot({
           flexDirection: 'column',
           alignItems: 'center',
           gap: 18,
+          transition: 'opacity 0.3s ease',
+          ...(isClean ? { opacity: 0, pointerEvents: 'none' } : {}),
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -388,6 +399,31 @@ function VideoSlot({
             {isFullscreen ? 'Keluar' : 'Layar penuh'}
           </span>
         </div>
+
+        {/* Clean View */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); onCleanToggle(); }}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: '50%',
+              background: 'rgba(0,0,0,0.35)',
+              backdropFilter: 'blur(6px)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(232,51,42,0.4)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(0,0,0,0.35)')}
+          >
+            <EyeOff size={20} color="#fff" />
+          </button>
+          <span style={{ color: '#fff', fontSize: '0.7rem', fontWeight: 600 }}>Bersih</span>
+        </div>
       </div>
 
       {/* ── Bottom info ── */}
@@ -401,6 +437,8 @@ function VideoSlot({
           padding: '0 16px 28px',
           background: 'linear-gradient(0deg, rgba(0,0,0,0.75) 0%, transparent 100%)',
           pointerEvents: 'none',
+          opacity: isClean ? 0 : 1,
+          transition: 'opacity 0.3s ease',
         }}
       >
         <p
@@ -433,6 +471,8 @@ function VideoSlot({
           height: 3,
           background: 'rgba(255,255,255,0.15)',
           zIndex: 35,
+          opacity: isClean ? 0 : 1,
+          transition: 'opacity 0.3s ease',
         }}
       >
         <div
@@ -469,6 +509,7 @@ function WatchContent() {
   const [slots, setSlots] = useState<SlotData[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
+  const [isClean, setIsClean] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isScrollingRef = useRef(false);
@@ -660,8 +701,40 @@ function WatchContent() {
           display: 'flex',
           flexDirection: 'column',
           gap: 8,
+          opacity: isClean ? 0 : 1,
+          pointerEvents: isClean ? 'none' : 'auto',
+          transition: 'opacity 0.3s ease',
         }}
       >
+
+      {/* ── Restore button (hanya tampil saat clean mode aktif) ── */}
+      <button
+        onClick={() => setIsClean(false)}
+        style={{
+          position: 'fixed',
+          bottom: 24,
+          left: '50%',
+          transform: `translateX(-50%) translateY(${isClean ? '0' : '80px'})`,
+          zIndex: 200,
+          background: 'rgba(0,0,0,0.55)',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255,255,255,0.2)',
+          borderRadius: 24,
+          padding: '8px 20px',
+          color: '#fff',
+          fontSize: '0.8rem',
+          fontWeight: 600,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 7,
+          cursor: 'pointer',
+          opacity: isClean ? 1 : 0,
+          pointerEvents: isClean ? 'auto' : 'none',
+          transition: 'opacity 0.3s ease, transform 0.3s ease',
+        }}
+      >
+        <Eye size={15} /> Tampilkan kontrol
+      </button>
         <button
           onClick={() => navigateSlot(-1)}
           disabled={activeIndex === 0}
@@ -729,6 +802,8 @@ function WatchContent() {
             totalEpisodes={totalEpisodes || slots.length}
             isMuted={isMuted}
             onMuteToggle={() => setIsMuted((m) => !m)}
+            isClean={isClean}
+            onCleanToggle={() => setIsClean((c) => !c)}
           />
         ))}
       </div>
