@@ -1,3 +1,4 @@
+'use client'
 import HeroCarousel from '@/components/HeroCarousel';
 import DramaSection from '@/components/DramaSection';
 import {
