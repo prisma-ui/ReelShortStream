@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE = process.env.REELSHORT_API_URL ?? 'https://srrexus-reelshort.hf.space';
+const API_BASE = process.env.REELSHORT_API_URL ?? 'https://reelshortapi.onrender.com';
 const UPSTREAM_TIMEOUT = 7000; // 7 detik timeout untuk upstream API
 const MAX_RETRIES = 2;
 
@@ -11,7 +11,7 @@ async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<Respo
   try {
     const res = await fetch(url, {
       headers: { 'Content-Type': 'application/json' },
-      cache: 'no-store',
+      next: { revalidate: 300 }, // cache 5 menit di Next.js edge
       signal: controller.signal,
     });
 

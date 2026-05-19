@@ -1,27 +1,22 @@
-// Semua request lewat proxy Next.js — URL asli API tidak terekspose ke browser
 const API_BASE = '/api/reelshort';
 
-// Timeout dalam milliseconds untuk setiap request
-const REQUEST_TIMEOUT = 8000; // 8 detik
-const MAX_RETRIES = 2; // Maksimal retry jika timeout
-
-// In-memory cache dengan TTL 10 menit
+const REQUEST_TIMEOUT = 10000;
+const MAX_RETRIES = 2;
 const CACHE_TTL = 10 * 60 * 1000;
+
 const memoryCache = new Map<string, { data: unknown; expires: number }>();
 
 function getCached<T>(key: string): T | null {
   const entry = memoryCache.get(key);
   if (!entry) return null;
-  if (Date.now() > entry.expires) {
-    memoryCache.delete(key);
-    return null;
-  }
+  if (Date.now() > entry.expires) { memoryCache.delete(key); return null; }
   return entry.data as T;
 }
-
 function setCache<T>(key: string, data: T): void {
   memoryCache.set(key, { data, expires: Date.now() + CACHE_TTL });
 }
+
+// ── Types ─────────────────────────────────────────────────────────────────
 
 export interface SearchResult {
   book_id: string;
@@ -77,6 +72,26 @@ export interface Drama {
   chapters?: ChapterInfo[];
 }
 
+// Detail drama lengkap dari endpoint /drama/:book_id
+export interface DramaDetail {
+  book_id: string;
+  book_title: string;
+  filtered_title: string;
+  book_pic: string;
+  banner_pic?: string;
+  synopsis?: string;
+  short_desc?: string;
+  chapter_count: number;
+  categories?: string[];
+  tags?: string[];
+  language?: string;
+  score?: number;
+  total_likes?: number;
+  author?: string;
+  release_year?: string;
+  episodes: EpisodeItem[];
+}
+
 export interface EpisodeDetail {
   id: string;
   drama_id: string;
@@ -89,15 +104,9 @@ export interface EpisodeDetail {
   next_episode?: EpisodeItem | null;
 }
 
-/**
- * Fetch dengan timeout, retry logic, dan in-memory cache
- * @param path - API path
- * @param retries - Jumlah retry yang tersisa
- * @param bypassCache - Skip cache (misal untuk force refresh)
- * @returns Response dari API
- */
+// ── Fetch helper ─────────────────────────────────────────────────────────
+
 async function apiFetch<T>(path: string, retries = MAX_RETRIES, bypassCache = false): Promise<T> {
-  // Cek memory cache dulu (kecuali untuk endpoint video/search yang dinamis)
   if (!bypassCache) {
     const cached = getCached<T>(path);
     if (cached !== null) return cached;
@@ -111,13 +120,10 @@ async function apiFetch<T>(path: string, retries = MAX_RETRIES, bypassCache = fa
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
     });
-
     clearTimeout(timeoutId);
 
     if (!res.ok) {
-      // Jika 5xx error dan masih ada retry, coba lagi
       if (res.status >= 500 && retries > 0) {
-        console.warn(`API error ${res.status}, retrying... (${retries} attempts left)`);
         await new Promise(r => setTimeout(r, 500));
         return apiFetch<T>(path, retries - 1, bypassCache);
       }
@@ -125,97 +131,82 @@ async function apiFetch<T>(path: string, retries = MAX_RETRIES, bypassCache = fa
     }
 
     const data = await res.json();
-
-    // Simpan ke cache (kecuali bypass)
-    if (!bypassCache) {
-      setCache<T>(path, data);
-    }
-
+    if (!bypassCache) setCache<T>(path, data);
     return data;
+
   } catch (error) {
     clearTimeout(timeoutId);
-
-    // Handle AbortError (timeout)
     if (error instanceof Error && error.name === 'AbortError') {
       if (retries > 0) {
-        console.warn(`Request timeout, retrying... (${retries} attempts left)`);
         await new Promise(r => setTimeout(r, 500));
         return apiFetch<T>(path, retries - 1, bypassCache);
       }
-      throw new Error('Request timeout after maximum retries');
+      throw new Error('Request timeout');
     }
-
     throw error;
   }
 }
 
+// ── API calls ─────────────────────────────────────────────────────────────
+
 export async function searchDramas(keywords: string): Promise<SearchResult[]> {
   try {
-    // Search tidak di-cache karena query dinamis
     const data = await apiFetch<{ results: SearchResult[] }>(
-      `/search?keywords=${encodeURIComponent(keywords)}`,
-      MAX_RETRIES,
-      true
+      `/search?keywords=${encodeURIComponent(keywords)}`, MAX_RETRIES, true
     );
     return data.results ?? [];
+  } catch { return []; }
+}
+
+/** Detail lengkap drama: sinopsis, kategori, daftar episode */
+export async function getDramaDetail(book_id: string, filtered_title: string): Promise<DramaDetail | null> {
+  try {
+    return await apiFetch<DramaDetail>(
+      `/drama/${book_id}?filtered_title=${encodeURIComponent(filtered_title)}`,
+      MAX_RETRIES, false
+    );
   } catch (error) {
-    console.error('Error searching dramas:', error);
-    return [];
+    console.error('Error getDramaDetail:', error);
+    return null;
   }
 }
 
+/** Backward compat — episode list saja */
 export async function getEpisodeList(book_id: string, filtered_title: string): Promise<EpisodeItem[]> {
   try {
     const data = await apiFetch<{ episodes: EpisodeItem[] }>(
       `/episodes/${book_id}?filtered_title=${encodeURIComponent(filtered_title)}`
     );
     return data.episodes ?? [];
-  } catch (error) {
-    console.error('Error getting episode list:', error);
-    return [];
-  }
+  } catch { return []; }
 }
 
 export async function getVideoData(
-  book_id: string,
-  episode_num: number,
-  filtered_title: string,
-  chapter_id: string
+  book_id: string, episode_num: number,
+  filtered_title: string, chapter_id: string
 ): Promise<VideoData> {
-  // Video URL tidak di-cache karena mungkin expire
   return apiFetch<VideoData>(
     `/video/${book_id}/${episode_num}?filtered_title=${encodeURIComponent(filtered_title)}&chapter_id=${encodeURIComponent(chapter_id)}`,
-    MAX_RETRIES,
-    true
+    MAX_RETRIES, true
   );
 }
 
 export async function getDramaDub(): Promise<BookshelfData> {
-  try {
-    return await apiFetch<BookshelfData>('/dramadub');
-  } catch (error) {
-    console.error('Error getting drama dub:', error);
-    return { bookshelf_name: 'Drama Dub', books: [] };
-  }
+  try { return await apiFetch<BookshelfData>('/dramadub'); }
+  catch { return { bookshelf_name: 'Drama Dub', books: [] }; }
 }
 
 export async function getNewRelease(): Promise<BookshelfData> {
-  try {
-    return await apiFetch<BookshelfData>('/newrelease');
-  } catch (error) {
-    console.error('Error getting new release:', error);
-    return { bookshelf_name: 'New Release', books: [] };
-  }
+  try { return await apiFetch<BookshelfData>('/newrelease'); }
+  catch { return { bookshelf_name: 'New Release', books: [] }; }
 }
 
 export async function getRecommended(): Promise<BookshelfData> {
-  try {
-    return await apiFetch<BookshelfData>('/recommend');
-  } catch (error) {
-    console.error('Error getting recommended:', error);
-    return { bookshelf_name: 'Recommended', books: [] };
-  }
+  try { return await apiFetch<BookshelfData>('/recommend'); }
+  catch { return { bookshelf_name: 'Recommended', books: [] }; }
 }
+
+// ── Converters ────────────────────────────────────────────────────────────
 
 export function bookToDrama(book: BookInfo): Drama {
   return {
