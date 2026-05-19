@@ -9,12 +9,10 @@ import {
   Pause,
   Volume2,
   VolumeX,
-  Heart,
-  Share2,
-  MessageCircle,
+  Maximize,
+  Minimize,
   ChevronUp,
   ChevronDown,
-  Bookmark,
 } from 'lucide-react';
 import { getVideoData, getEpisodeList, VideoData, EpisodeItem } from '@/lib/api';
 
@@ -54,9 +52,9 @@ function VideoSlot({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [liked, setLiked] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [progress, setProgress] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [showTap, setShowTap] = useState(false);
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -101,20 +99,26 @@ function VideoSlot({
     tapTimerRef.current = setTimeout(() => setShowTap(false), 700);
   }, []);
 
-  const likeCount = Math.floor(Math.random() * 90 + 10) + 'K';
-  const commentCount = Math.floor(Math.random() * 5 + 1) + 'K';
+  const handleFullscreen = useCallback(async () => {
+    const el = containerRef.current ?? document.documentElement;
+    if (!document.fullscreenElement) {
+      try { await el.requestFullscreen(); setIsFullscreen(true); } catch {}
+    } else {
+      try { await document.exitFullscreen(); setIsFullscreen(false); } catch {}
+    }
+  }, []);
+
+  // Sync fullscreen state on external exit (e.g. pressing Esc)
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
 
   return (
     <div
+      ref={containerRef}
       style={{
-        position: 'relative',
-        width: '100%',
-        height: '100dvh',
-        background: '#000',
-        flexShrink: 0,
-        scrollSnapAlign: 'start',
-        scrollSnapStop: 'always',
-        overflowY: 'hidden',
       }}
     >
       {/* ── Video ── */}
@@ -291,7 +295,7 @@ function VideoSlot({
         </button>
       </div>
 
-      {/* ── Right action bar ── */}
+      {/* ── Right action bar: Fullscreen ── */}
       <div
         style={{
           position: 'absolute',
@@ -322,101 +326,35 @@ function VideoSlot({
           )}
         </div>
 
-        {/* Like */}
+        {/* Fullscreen */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
           <button
-            onClick={() => setLiked((p) => !p)}
+            onClick={handleFullscreen}
             style={{
               width: 44,
               height: 44,
               borderRadius: '50%',
               background: 'rgba(0,0,0,0.35)',
               backdropFilter: 'blur(6px)',
-              border: 'none',
+              border: '1px solid rgba(255,255,255,0.15)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
-              transition: 'transform 0.15s',
-              transform: liked ? 'scale(1.2)' : 'scale(1)',
+              transition: 'background 0.15s, transform 0.15s',
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(232,51,42,0.4)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(0,0,0,0.35)')}
           >
-            <Heart
-              size={22}
-              color={liked ? '#ff4757' : '#fff'}
-              fill={liked ? '#ff4757' : 'transparent'}
-              strokeWidth={liked ? 0 : 2}
-            />
+            {isFullscreen ? (
+              <Minimize size={20} color="#fff" />
+            ) : (
+              <Maximize size={20} color="#fff" />
+            )}
           </button>
-          <span style={{ color: '#fff', fontSize: '0.7rem', fontWeight: 600 }}>{likeCount}</span>
-        </div>
-
-        {/* Comment */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-          <button
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: '50%',
-              background: 'rgba(0,0,0,0.35)',
-              backdropFilter: 'blur(6px)',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-            }}
-          >
-            <MessageCircle size={22} color="#fff" />
-          </button>
-          <span style={{ color: '#fff', fontSize: '0.7rem', fontWeight: 600 }}>{commentCount}</span>
-        </div>
-
-        {/* Bookmark */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-          <button
-            onClick={() => setSaved((p) => !p)}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: '50%',
-              background: 'rgba(0,0,0,0.35)',
-              backdropFilter: 'blur(6px)',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-            }}
-          >
-            <Bookmark
-              size={22}
-              color={saved ? '#f5c842' : '#fff'}
-              fill={saved ? '#f5c842' : 'transparent'}
-            />
-          </button>
-          <span style={{ color: '#fff', fontSize: '0.7rem', fontWeight: 600 }}>Simpan</span>
-        </div>
-
-        {/* Share */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-          <button
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: '50%',
-              background: 'rgba(0,0,0,0.35)',
-              backdropFilter: 'blur(6px)',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-            }}
-          >
-            <Share2 size={20} color="#fff" />
-          </button>
-          <span style={{ color: '#fff', fontSize: '0.7rem', fontWeight: 600 }}>Bagikan</span>
+          <span style={{ color: '#fff', fontSize: '0.7rem', fontWeight: 600 }}>
+            {isFullscreen ? 'Keluar' : 'Layar penuh'}
+          </span>
         </div>
       </div>
 
