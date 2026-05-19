@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE = process.env.REELSHORT_API_URL ?? 'https://reelshortapi.onrender.com';
+const API_BASE = process.env.REELSHORT_API_URL ?? 'https://srrexus-reelshort.hf.space';
 const UPSTREAM_TIMEOUT = 7000; // 7 detik timeout untuk upstream API
 const MAX_RETRIES = 2;
 
