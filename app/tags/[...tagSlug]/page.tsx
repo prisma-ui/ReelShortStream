@@ -34,9 +34,8 @@ export default function TagDramasPage({ params }: PageProps) {
   const isSubTag     = tagSlugParts.length > 1;
   const fullSlug     = tagSlugParts.join('/');
 
-  const [tagName, setTagName] = useState<string>(
-    (actorSlug || categorySlug).replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-  );
+  const initialName = (actorSlug || categorySlug).replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const [tagName, setTagName] = useState<string>(initialName);
   const [dramas, setDramas] = useState<ReturnType<typeof searchResultToDrama>[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +68,9 @@ export default function TagDramasPage({ params }: PageProps) {
   };
 
   useEffect(() => {
+    setTagName(initialName);
+    setDramas([]);
+    setError(null);
     loadDramas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fullSlug]);

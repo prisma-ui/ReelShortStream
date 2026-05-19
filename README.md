@@ -41,7 +41,7 @@ Buka [http://localhost:3000](http://localhost:3000).
 |---|---|
 | `REELSHORT_API_URL` | URL base API ReelShort (wajib di production) |
 
-Nilai default jika tidak di-set: `http://localhost:3000`
+Nilai default jika tidak di-set: `https://reelshortapi.onrender.com`
 
 ## Deploy ke Vercel
 
@@ -49,7 +49,7 @@ Nilai default jika tidak di-set: `http://localhost:3000`
 2. Import project di [vercel.com](https://vercel.com)
 3. Tambahkan environment variable di **Project Settings → Environment Variables**:
    ```
-   REELSHORT_API_URL = http://localhost:3000
+   REELSHORT_API_URL = https://reelshortapi.onrender.com
    ```
 4. Klik **Deploy**
 
@@ -58,4 +58,4 @@ Nilai default jika tidak di-set: `http://localhost:3000`
 - [Next.js 15](https://nextjs.org) — App Router
 - [TypeScript](https://typescriptlang.org)
 - [Lucide React](https://lucide.dev) — Icons
-- [ReelShort API](http://localhost:3000) — Data source
+- [ReelShort API](https://google.com) — Data source

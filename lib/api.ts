@@ -293,13 +293,6 @@ export interface TagDramas {
   tag_name: string;
   dramas: SearchResult[];
   total: number;
-}
-
-export interface TagDramas {
-  tag_slug: string;
-  tag_name: string;
-  dramas: SearchResult[];
-  total: number;
   page?: number;
   total_pages?: number;
 }
@@ -356,9 +349,10 @@ export async function getDramasByActorTag(
   category_slug: string,
   actor_slug: string
 ): Promise<TagDramas | null> {
-  const path = `${category_slug}/${actor_slug}`;
   try {
-    return await apiFetch<TagDramas>(`/tags/${encodeURIComponent(path)}`);
+    return await apiFetch<TagDramas>(
+      `/tags/${encodeURIComponent(category_slug)}/${encodeURIComponent(actor_slug)}`
+    );
   } catch (error) {
     console.error('Error getDramasByActorTag:', error);
     return null;
