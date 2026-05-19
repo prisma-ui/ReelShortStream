@@ -25,10 +25,32 @@ async function HomeContent() {
     return (
       <div style={{ textAlign: 'center', padding: '120px 20px' }}>
         <div style={{ fontSize: '3rem', marginBottom: '12px' }}>⚠️</div>
-        <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '8px' }}>Gagal Memuat Konten</h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-          Tidak dapat terhubung ke API. Coba refresh halaman.
+        <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '8px' }}>
+          Gagal Memuat Konten
+        </h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '12px' }}>
+          Tidak dapat terhubung ke API. Server mungkin sedang cold start (30–60 detik pertama).
         </p>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: '24px' }}>
+          Pastikan <code style={{ background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: '4px' }}>REELSHORT_API_URL</code> di{' '}
+          <code style={{ background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: '4px' }}>.env.local</code> sudah benar dan API aktif.
+        </p>
+        {/* Gunakan meta refresh sebagai fallback — tidak butuh 'use client' */}
+        <a
+          href="/"
+          style={{
+            display: 'inline-block',
+            background: '#e8531d',
+            color: '#fff',
+            borderRadius: '8px',
+            padding: '10px 24px',
+            fontSize: '0.875rem',
+            fontWeight: 600,
+            textDecoration: 'none',
+          }}
+        >
+          🔄 Coba Lagi
+        </a>
       </div>
     );
   }
