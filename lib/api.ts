@@ -1,14 +1,27 @@
-// ✅ UPDATED: Proxy lewat Next.js API route dengan caching
-// Sebelumnya: fetch langsung ke backend (terus timeout/loading)
-// Sekarang: fetch ke Next.js proxy yang bisa cache response
+// Semua request lewat proxy Next.js — URL asli API tidak terekspose ke browser
 const API_BASE = '/api/reelshort';
 
 // Timeout dalam milliseconds untuk setiap request
-const REQUEST_TIMEOUT = 12000; // 12 detik (lebih tolerant)
-const MAX_RETRIES = 2;
+const REQUEST_TIMEOUT = 8000; // 8 detik
+const MAX_RETRIES = 2; // Maksimal retry jika timeout
 
-// ✅ NEW: Request deduplication untuk mencegah race conditions
-const pendingRequests = new Map<string, Promise<any>>();
+// In-memory cache dengan TTL 10 menit
+const CACHE_TTL = 10 * 60 * 1000;
+const memoryCache = new Map<string, { data: unknown; expires: number }>();
+
+function getCached<T>(key: string): T | null {
+  const entry = memoryCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expires) {
+    memoryCache.delete(key);
+    return null;
+  }
+  return entry.data as T;
+}
+
+function setCache<T>(key: string, data: T): void {
+  memoryCache.set(key, { data, expires: Date.now() + CACHE_TTL });
+}
 
 export interface SearchResult {
   book_id: string;
@@ -77,117 +90,88 @@ export interface EpisodeDetail {
 }
 
 /**
- * ✅ IMPROVED: Fetch dengan proper caching, timeout, dan request deduplication
+ * Fetch dengan timeout, retry logic, dan in-memory cache
  * @param path - API path
  * @param retries - Jumlah retry yang tersisa
+ * @param bypassCache - Skip cache (misal untuk force refresh)
  * @returns Response dari API
  */
-async function apiFetch<T>(path: string, retries = MAX_RETRIES): Promise<T> {
-  // ✅ NEW: Jika request yang sama sudah pending, tunggu hasilnya
-  // Mencegah multiple simultaneous requests ke endpoint yang sama
-  if (pendingRequests.has(path)) {
-    console.debug(`[API] Using cached request for: ${path}`);
-    return pendingRequests.get(path)!;
+async function apiFetch<T>(path: string, retries = MAX_RETRIES, bypassCache = false): Promise<T> {
+  // Cek memory cache dulu (kecuali untuk endpoint video/search yang dinamis)
+  if (!bypassCache) {
+    const cached = getCached<T>(path);
+    if (cached !== null) return cached;
   }
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
-  // ✅ NEW: Store promise agar request lain bisa menunggu
-  const requestPromise = (async () => {
-    try {
-      // ✅ CHANGED: cache: 'default' instead of 'no-store'
-      // Ini mengizinkan browser + Next.js untuk cache response
-      // Cache headers dari server akan di-respek oleh browser
-      const res = await fetch(`${API_BASE}${path}`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        cache: 'default', // ✅ Browser akan cache berdasarkan Cache-Control header
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!res.ok) {
-        // Jika 5xx error dan masih ada retry, coba lagi
-        if (res.status >= 500 && retries > 0) {
-          console.warn(
-            `[API] Error ${res.status}, retrying... (${retries} attempts left)`
-          );
-          // Tunggu sebentar sebelum retry (exponential backoff)
-          await new Promise((r) => setTimeout(r, 1000));
-          return apiFetch<T>(path, retries - 1);
-        }
-
-        // Jika 4xx error, don't retry (client error)
-        if (res.status >= 400 && res.status < 500) {
-          const errorText = await res.text();
-          throw new Error(
-            `API error ${res.status}: ${errorText || res.statusText}`
-          );
-        }
-
-        throw new Error(`API error: ${res.status} ${res.statusText}`);
-      }
-
-      return res.json() as Promise<T>;
-    } catch (error) {
-      clearTimeout(timeoutId);
-
-      // Handle AbortError (timeout)
-      if (error instanceof Error && error.name === 'AbortError') {
-        if (retries > 0) {
-          console.warn(
-            `[API] Request timeout, retrying... (${retries} attempts left)`
-          );
-          await new Promise((r) => setTimeout(r, 1000));
-          return apiFetch<T>(path, retries - 1);
-        }
-        throw new Error('Request timeout after maximum retries');
-      }
-
-      throw error;
-    }
-  })();
-
-  pendingRequests.set(path, requestPromise);
-
   try {
-    return await requestPromise;
-  } finally {
-    // ✅ NEW: Cleanup setelah request selesai
-    // Tapi keep cache di pendingRequests untuk SWR pattern
-    setTimeout(() => {
-      pendingRequests.delete(path);
-    }, 300); // Grace period 300ms untuk deduplicate rapid requests
+    const res = await fetch(`${API_BASE}${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      // Jika 5xx error dan masih ada retry, coba lagi
+      if (res.status >= 500 && retries > 0) {
+        console.warn(`API error ${res.status}, retrying... (${retries} attempts left)`);
+        await new Promise(r => setTimeout(r, 500));
+        return apiFetch<T>(path, retries - 1, bypassCache);
+      }
+      throw new Error(`API error: ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    // Simpan ke cache (kecuali bypass)
+    if (!bypassCache) {
+      setCache<T>(path, data);
+    }
+
+    return data;
+  } catch (error) {
+    clearTimeout(timeoutId);
+
+    // Handle AbortError (timeout)
+    if (error instanceof Error && error.name === 'AbortError') {
+      if (retries > 0) {
+        console.warn(`Request timeout, retrying... (${retries} attempts left)`);
+        await new Promise(r => setTimeout(r, 500));
+        return apiFetch<T>(path, retries - 1, bypassCache);
+      }
+      throw new Error('Request timeout after maximum retries');
+    }
+
+    throw error;
   }
 }
 
 export async function searchDramas(keywords: string): Promise<SearchResult[]> {
   try {
+    // Search tidak di-cache karena query dinamis
     const data = await apiFetch<{ results: SearchResult[] }>(
-      `/search?keywords=${encodeURIComponent(keywords)}`
+      `/search?keywords=${encodeURIComponent(keywords)}`,
+      MAX_RETRIES,
+      true
     );
     return data.results ?? [];
   } catch (error) {
-    console.error('[API] Error searching dramas:', error);
+    console.error('Error searching dramas:', error);
     return [];
   }
 }
 
-export async function getEpisodeList(
-  book_id: string,
-  filtered_title: string
-): Promise<EpisodeItem[]> {
+export async function getEpisodeList(book_id: string, filtered_title: string): Promise<EpisodeItem[]> {
   try {
     const data = await apiFetch<{ episodes: EpisodeItem[] }>(
-      `/episodes/${book_id}?filtered_title=${encodeURIComponent(
-        filtered_title
-      )}`
+      `/episodes/${book_id}?filtered_title=${encodeURIComponent(filtered_title)}`
     );
     return data.episodes ?? [];
   } catch (error) {
-    console.error('[API] Error getting episode list:', error);
+    console.error('Error getting episode list:', error);
     return [];
   }
 }
@@ -198,10 +182,11 @@ export async function getVideoData(
   filtered_title: string,
   chapter_id: string
 ): Promise<VideoData> {
+  // Video URL tidak di-cache karena mungkin expire
   return apiFetch<VideoData>(
-    `/video/${book_id}/${episode_num}?filtered_title=${encodeURIComponent(
-      filtered_title
-    )}&chapter_id=${encodeURIComponent(chapter_id)}`
+    `/video/${book_id}/${episode_num}?filtered_title=${encodeURIComponent(filtered_title)}&chapter_id=${encodeURIComponent(chapter_id)}`,
+    MAX_RETRIES,
+    true
   );
 }
 
@@ -209,7 +194,7 @@ export async function getDramaDub(): Promise<BookshelfData> {
   try {
     return await apiFetch<BookshelfData>('/dramadub');
   } catch (error) {
-    console.error('[API] Error getting drama dub:', error);
+    console.error('Error getting drama dub:', error);
     return { bookshelf_name: 'Drama Dub', books: [] };
   }
 }
@@ -218,7 +203,7 @@ export async function getNewRelease(): Promise<BookshelfData> {
   try {
     return await apiFetch<BookshelfData>('/newrelease');
   } catch (error) {
-    console.error('[API] Error getting new release:', error);
+    console.error('Error getting new release:', error);
     return { bookshelf_name: 'New Release', books: [] };
   }
 }
@@ -227,7 +212,7 @@ export async function getRecommended(): Promise<BookshelfData> {
   try {
     return await apiFetch<BookshelfData>('/recommend');
   } catch (error) {
-    console.error('[API] Error getting recommended:', error);
+    console.error('Error getting recommended:', error);
     return { bookshelf_name: 'Recommended', books: [] };
   }
 }
@@ -254,9 +239,7 @@ export function searchResultToDrama(result: SearchResult): Drama {
   };
 }
 
-export function getCoverImage(
-  item: Drama | EpisodeDetail | SearchResult
-): string {
+export function getCoverImage(item: Drama | EpisodeDetail | SearchResult): string {
   if ('cover_image' in item) return item.cover_image || '/placeholder.jpg';
   if ('book_pic' in item) return item.book_pic || '/placeholder.jpg';
   return '/placeholder.jpg';
