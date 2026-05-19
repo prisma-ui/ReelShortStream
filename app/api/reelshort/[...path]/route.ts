@@ -1,17 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE = process.env.REELSHORT_API_URL ?? 'https://reelshortapi.onrender.com';
-const UPSTREAM_TIMEOUT = 7000; // 7 detik timeout untuk upstream API
-const MAX_RETRIES = 2;
+if (!process.env.REELSHORT_API_URL) {
+  throw new Error('REELSHORT_API_URL belum di-set di .env.local');
+}
+
+const API_BASE = process.env.REELSHORT_API_URL;
+const API_PATH_PREFIX = process.env.REELSHORT_API_PATH ?? '/api/v1/reelshort';
+const UPSTREAM_TIMEOUT = 30000; // 30 detik — HF Space free tier butuh waktu cold start
+const MAX_RETRIES = 3;
+
+// Header browser-like agar tidak diblokir oleh upstream
+const UPSTREAM_HEADERS = {
+  'Content-Type': 'application/json',
+  'Accept': 'application/json',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+};
 
 async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<Response> {
+  // PENTING: Jangan gabungkan `next: { revalidate }` dengan AbortController signal
+  // di Next.js 15+. Konflik ini menyebabkan fetch tidak pernah resolve (hang).
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT);
 
   try {
     const res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json' },
-      next: { revalidate: 300 }, // cache 5 menit di Next.js edge
+      headers: UPSTREAM_HEADERS,
+      cache: 'no-store', // next: { revalidate } DIHAPUS — konflik dengan signal di Next.js 15+
       signal: controller.signal,
     });
 
@@ -20,10 +34,9 @@ async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<Respo
   } catch (error) {
     clearTimeout(timeoutId);
 
-    // Retry jika timeout dan masih ada attempt tersisa
     if (error instanceof Error && error.name === 'AbortError' && retries > 0) {
       console.warn(`Upstream timeout for ${url}, retrying... (${retries} attempts left)`);
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 1000));
       return fetchWithRetry(url, retries - 1);
     }
 
@@ -38,20 +51,50 @@ export async function GET(
   const { path } = await params;
   const pathname = path.join('/');
   const search = req.nextUrl.search;
-  const url = `${API_BASE}/api/v1/reelshort/${pathname}${search}`;
+  const url = `${API_BASE}${API_PATH_PREFIX}/${pathname}${search}`;
+
+  console.log(`[proxy] GET ${url}`);
 
   try {
     const res = await fetchWithRetry(url);
+
+    if (!res.ok) {
+      console.error(`[proxy] Upstream returned ${res.status} for ${pathname}`);
+      return NextResponse.json(
+        { error: `Upstream error: ${res.status}` },
+        {
+          status: res.status,
+          headers: {
+            'Cache-Control': 'no-store',
+            'Access-Control-Allow-Origin': '*',
+          }
+        }
+      );
+    }
+
     const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
+    return NextResponse.json(data, {
+      status: 200,
+      headers: {
+        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=60',
+        'Access-Control-Allow-Origin': '*',
+      }
+    });
   } catch (error) {
-    console.error(`Proxy error for ${pathname}:`, error);
-    
-    // Return 504 Gateway Timeout jika timeout, 502 untuk error lainnya
-    const status = error instanceof Error && error.name === 'AbortError' ? 504 : 502;
+    console.error(`[proxy] Error for ${pathname}:`, error);
+
+    const isTimeout = error instanceof Error && error.name === 'AbortError';
+    const status = isTimeout ? 504 : 502;
+    const message = isTimeout
+      ? 'API sedang cold start, coba refresh dalam 30 detik'
+      : error instanceof Error ? error.message : 'Upstream error';
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Upstream error' }, 
-      { status }
+      { error: message },
+      {
+        status,
+        headers: { 'Cache-Control': 'no-store' }
+      }
     );
   }
 }
