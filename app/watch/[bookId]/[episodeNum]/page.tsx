@@ -43,6 +43,7 @@ function VideoSlot({
   onMuteToggle,
   isClean,
   onCleanToggle,
+  onVideoEnded,
 }: {
   slot: SlotData;
   isActive: boolean;
