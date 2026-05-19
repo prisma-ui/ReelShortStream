@@ -100,25 +100,57 @@ function VideoSlot({
   }, []);
 
   const handleFullscreen = useCallback(async () => {
+    const v = videoRef.current;
+    if (!v) return;
+
+    // Coba native video fullscreen dulu (mobile support terbaik)
+    if ((v as HTMLVideoElement & { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen) {
+      if (isFullscreen) {
+        (document as Document & { webkitExitFullscreen?: () => void }).webkitExitFullscreen?.();
+      } else {
+        (v as HTMLVideoElement & { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen!();
+      }
+      return;
+    }
+
+    // Fallback: standard Fullscreen API pada container
     const el = containerRef.current ?? document.documentElement;
     if (!document.fullscreenElement) {
-      try { await el.requestFullscreen(); setIsFullscreen(true); } catch {}
+      try { await el.requestFullscreen(); } catch (err) { console.warn('Fullscreen failed:', err); }
     } else {
-      try { await document.exitFullscreen(); setIsFullscreen(false); } catch {}
+      try { await document.exitFullscreen(); } catch {}
     }
-  }, []);
+  }, [isFullscreen]);
 
   // Sync fullscreen state on external exit (e.g. pressing Esc)
   useEffect(() => {
-    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    const onChange = () => {
+      const isFs = !!(
+        document.fullscreenElement ||
+        (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement
+      );
+      setIsFullscreen(isFs);
+    };
     document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
+    document.addEventListener('webkitfullscreenchange', onChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      document.removeEventListener('webkitfullscreenchange', onChange);
+    };
   }, []);
 
   return (
     <div
       ref={containerRef}
       style={{
+        position: 'relative',
+        width: '100%',
+        height: '100dvh',
+        background: '#000',
+        flexShrink: 0,
+        scrollSnapAlign: 'start',
+        scrollSnapStop: 'always',
+        overflowY: 'hidden',
       }}
     >
       {/* ── Video ── */}
@@ -524,18 +556,27 @@ function WatchContent() {
   );
 
   // ── Keyboard navigation (desktop) ──
+  const navigateSlotRef = useRef<(dir: 1 | -1) => void>(() => {});
+  useEffect(() => { navigateSlotRef.current = navigateSlot; }, [navigateSlot]);
+
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
-        navigateSlot(e.key === 'ArrowDown' ? 1 : -1);
+        navigateSlotRef.current(e.key === 'ArrowDown' ? 1 : -1);
       }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  });
+  }, []); // ← [] penting: register sekali saja
 
   // ── Scroll detection: update activeIndex ──
+  const activeIndexRef = useRef(0);
+  useEffect(() => { activeIndexRef.current = activeIndex; }, [activeIndex]);
+
+  const slotsRef = useRef<SlotData[]>([]);
+  useEffect(() => { slotsRef.current = slots; }, [slots]);
+
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -543,10 +584,10 @@ function WatchContent() {
     const handleScroll = () => {
       if (isScrollingRef.current) return;
       const idx = Math.round(container.scrollTop / window.innerHeight);
-      if (idx !== activeIndex) {
+      if (idx !== activeIndexRef.current) {
+        activeIndexRef.current = idx;
         setActiveIndex(idx);
-        // Update URL (replace, no history push)
-        const slot = slots[idx];
+        const slot = slotsRef.current[idx];
         if (slot) {
           const url = `/watch/${bookId}/${slot.episodeNum}?filtered_title=${encodeURIComponent(filteredTitle)}&chapter_id=${encodeURIComponent(slot.chapterId)}&title=${encodeURIComponent(dramaTitle)}&cover=${encodeURIComponent(coverImage)}`;
           window.history.replaceState(null, '', url);
@@ -556,22 +597,23 @@ function WatchContent() {
 
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
-  }, [activeIndex, slots, bookId, filteredTitle, dramaTitle, coverImage]);
+  }, [bookId, filteredTitle, dramaTitle, coverImage]); // ← tidak include activeIndex/slots
 
   // ── Programmatic scroll to slot ──
   const navigateSlot = useCallback(
     (direction: 1 | -1) => {
-      const nextIdx = activeIndex + direction;
-      if (nextIdx < 0 || nextIdx >= slots.length) return;
+      const nextIdx = activeIndexRef.current + direction;
+      if (nextIdx < 0 || nextIdx >= slotsRef.current.length) return;
       const container = scrollContainerRef.current;
       if (!container) return;
 
       isScrollingRef.current = true;
       container.scrollTo({ top: nextIdx * window.innerHeight, behavior: 'smooth' });
       setActiveIndex(nextIdx);
-      setTimeout(() => { isScrollingRef.current = false; }, 500);
+      activeIndexRef.current = nextIdx;
+      setTimeout(() => { isScrollingRef.current = false; }, 800);
     },
-    [activeIndex, slots.length]
+    []
   );
 
   // ── Touch swipe (mobile fallback) ──
@@ -673,9 +715,7 @@ function WatchContent() {
           height: '100dvh',
           overflowY: 'scroll',
           scrollSnapType: 'y mandatory',
-          scrollBehavior: 'smooth',
           WebkitOverflowScrolling: 'touch',
-          /* hide scrollbar */
           msOverflowStyle: 'none',
           scrollbarWidth: 'none',
         }}
